@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# IDE y herramientas locales
+.vscode/
+.idea/
+*.swp
+.DS_Store
+.claude/
+
+# Datos (gitignored según CLAUDE.md)
+data/raw/
+data/processed/
+data/**/images/
+data/**/labels/
+data/**/annotations/
+
+# Modelos intermedios y runs de YOLO (los pesos finales sí van en Git LFS)
+runs/
+wandb/
+*.pth.tmp
+checkpoints/
+models/origin_train_state.json
+models/origin_checkpoint.keras/
+models/*_best.h5
+models/_backup_*/
+
+# Pesos base de Ultralytics (se autodescarga al entrenar)
+yolov8*.pt
+yolov8*.yaml
+
+# Logs y outputs
+logs/
+*.log
+app/static/plots/*.png
+app/static/plots/*.jpg
+app/static/plots/*.csv
+app/static/plots/*.json
+!app/static/plots/.gitkeep
+
+# Build / despliegue
+build/
+dist/
+*.tar.gz

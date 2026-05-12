@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Control de acceso vehicular</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+<nav class="navbar navbar-dark bg-dark">
+    <div class="container">
+        <span class="navbar-brand mb-0 h1">🚗 Control de acceso vehicular</span>
+        <a class="btn btn-outline-light btn-sm" href="/metrics">Ver métricas</a>
+    </div>
+</nav>
+
+<main class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h4 class="card-title">Subir imagen del vehículo</h4>
+                    <p class="text-muted small">Formatos aceptados: JPG, PNG, WEBP. Tamaño máximo: 10 MB.</p>
+
+                    <form id="upload-form" class="mb-3">
+                        <div class="mb-3">
+                            <input type="file" class="form-control" id="image-input" name="image"
+                                   accept="image/jpeg,image/png,image/webp" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="submit-btn">
+                            Analizar imagen
+                        </button>
+                    </form>
+
+                    <div id="preview-wrapper" class="mb-3 d-none">
+                        <img id="preview" class="img-fluid rounded border" alt="Vista previa">
+                    </div>
+
+                    <div id="result-wrapper" class="d-none">
+                        <h5 class="mb-3">Resultado del análisis</h5>
+
+                        <!-- Tarjeta: Vehículo -->
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="text-uppercase text-muted small">Tipo de vehículo</h6>
+                                <p class="h3 mb-1" id="r-vehicle-type">—</p>
+                                <p class="mb-0 text-muted">
+                                    Confianza:
+                                    <span id="r-vehicle-conf" class="fw-bold">—</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Tarjeta: Placa -->
+                        <div class="card mb-3" id="r-plate-card">
+                            <div class="card-body">
+                                <h6 class="text-uppercase text-muted small">Placa detectada</h6>
+                                <div id="r-plate-detected">
+                                    <p class="mb-1 text-muted">
+                                        Confianza de detección:
+                                        <span id="r-plate-conf" class="fw-bold">—</span>
+                                    </p>
+                                    <p class="mb-0 text-muted small">
+                                        Ubicación (x, y, ancho, alto):
+                                        <code id="r-plate-bbox">—</code>
+                                    </p>
+                                </div>
+                                <div id="r-plate-missing" class="d-none">
+                                    <p class="text-warning mb-0">
+                                        ⚠️ No se detectó ninguna placa en la imagen.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tarjeta: Estado USA -->
+                        <div class="card mb-3" id="r-origin-card">
+                            <div class="card-body">
+                                <h6 class="text-uppercase text-muted small">Estado de origen (USA)</h6>
+                                <div id="r-origin-detected">
+                                    <p class="h3 mb-1" id="r-origin-state">—</p>
+                                    <p class="mb-0 text-muted">
+                                        Confianza:
+                                        <span id="r-origin-conf" class="fw-bold">—</span>
+                                    </p>
+                                </div>
+                                <div id="r-origin-missing" class="d-none">
+                                    <p class="text-secondary mb-0">
+                                        Sin clasificación (placa no detectada).
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <details class="mt-3">
+                            <summary class="text-muted small">Ver respuesta técnica (JSON)</summary>
+                            <pre id="result-raw" class="bg-dark text-light p-3 rounded small mt-2"></pre>
+                        </details>
+                    </div>
+
+                    <div id="error-wrapper" class="alert alert-danger d-none" role="alert"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script>
+const form = document.getElementById('upload-form');
+const input = document.getElementById('image-input');
+const preview = document.getElementById('preview');
+const previewWrapper = document.getElementById('preview-wrapper');
+const resultWrapper = document.getElementById('result-wrapper');
+const errorWrapper = document.getElementById('error-wrapper');
+const submitBtn = document.getElementById('submit-btn');
+
+const rVehicleType = document.getElementById('r-vehicle-type');
+const rVehicleConf = document.getElementById('r-vehicle-conf');
+const rPlateDetected = document.getElementById('r-plate-detected');
+const rPlateMissing = document.getElementById('r-plate-missing');
+const rPlateConf = document.getElementById('r-plate-conf');
+const rPlateBbox = document.getElementById('r-plate-bbox');
+const rOriginDetected = document.getElementById('r-origin-detected');
+const rOriginMissing = document.getElementById('r-origin-missing');
+const rOriginState = document.getElementById('r-origin-state');
+const rOriginConf = document.getElementById('r-origin-conf');
+const rRaw = document.getElementById('result-raw');
+
+const VEHICLE_LABEL = { moto: 'Moto 🏍️', carro: 'Carro 🚗' };
+const fmtPct = (v) => (v == null ? '—' : `${(v * 100).toFixed(1)} %`);
+
+input.addEventListener('change', () => {
+    const file = input.files[0];
+    if (!file) return;
+    preview.src = URL.createObjectURL(file);
+    previewWrapper.classList.remove('d-none');
+});
+
+function renderResult(data) {
+    rVehicleType.textContent = VEHICLE_LABEL[data.vehicle_type] || data.vehicle_type || '—';
+    rVehicleConf.textContent = fmtPct(data.vehicle_confidence);
+
+    if (data.plate_bbox) {
+        rPlateDetected.classList.remove('d-none');
+        rPlateMissing.classList.add('d-none');
+        rPlateConf.textContent = fmtPct(data.plate_confidence);
+        rPlateBbox.textContent = `(${data.plate_bbox.join(', ')})`;
+    } else {
+        rPlateDetected.classList.add('d-none');
+        rPlateMissing.classList.remove('d-none');
+    }
+
+    if (data.origin) {
+        rOriginDetected.classList.remove('d-none');
+        rOriginMissing.classList.add('d-none');
+        rOriginState.textContent = data.origin;
+        rOriginConf.textContent = fmtPct(data.origin_confidence);
+    } else {
+        rOriginDetected.classList.add('d-none');
+        rOriginMissing.classList.remove('d-none');
+    }
+
+    rRaw.textContent = JSON.stringify(data, null, 2);
+    resultWrapper.classList.remove('d-none');
+}
+
+form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    errorWrapper.classList.add('d-none');
+    resultWrapper.classList.add('d-none');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Analizando...';
+
+    const fd = new FormData();
+    fd.append('image', input.files[0]);
+
+    try {
+        const resp = await fetch('/predict', { method: 'POST', body: fd });
+        const data = await resp.json();
+        if (!resp.ok) {
+            errorWrapper.textContent = (data.error || 'Error desconocido')
+                + (data.detail ? ` — ${data.detail}` : '');
+            errorWrapper.classList.remove('d-none');
+        } else {
+            renderResult(data);
+        }
+    } catch (err) {
+        errorWrapper.textContent = 'Error de red: ' + err.message;
+        errorWrapper.classList.remove('d-none');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Analizar imagen';
+    }
+});
+</script>
+</body>
+</html>

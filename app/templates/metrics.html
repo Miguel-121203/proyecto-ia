@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Métricas — proyecto-ia-placas</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <style>
+        body { background: #f5f7fb; }
+        .kpi { border-left: 4px solid var(--bs-primary); }
+        .kpi .kpi-value { font-size: 2rem; font-weight: 700; color: #0d6efd; line-height: 1; }
+        .kpi .kpi-label { font-size: .75rem; text-transform: uppercase; letter-spacing: .5px; color: #6c757d; }
+        .kpi .kpi-sub { font-size: .8rem; color: #6c757d; }
+        .kpi.kpi-yolo { border-color: #20c997; }
+        .kpi.kpi-yolo .kpi-value { color: #159a74; }
+        .kpi.kpi-origin { border-color: #fd7e14; }
+        .kpi.kpi-origin .kpi-value { color: #e36a0f; }
+        .chart-card { background: white; border-radius: .75rem; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+        .chart-wrapper { position: relative; height: 320px; }
+        .section-title { font-weight: 600; margin-top: 2.5rem; margin-bottom: 1rem; padding-bottom: .5rem; border-bottom: 2px solid #dee2e6; }
+        .section-title .badge { vertical-align: middle; }
+        .img-plot { border: 1px solid #e5e7eb; border-radius: .5rem; background: white; }
+        .card h6 { color: #495057; font-weight: 600; }
+        .note { font-size: .85rem; color: #6c757d; }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-dark bg-dark">
+    <div class="container">
+        <a class="navbar-brand mb-0 h1" href="/">← Volver</a>
+        <span class="navbar-text text-light">Métricas del pipeline</span>
+    </div>
+</nav>
+
+<main class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h3 class="mb-1">Resultados del entrenamiento</h3>
+            <p class="text-muted mb-0">Pipeline en cascada: clasificador de vehículo → detector YOLO → clasificador de estado USA.</p>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <div class="card kpi shadow-sm h-100">
+                <div class="card-body">
+                    <div class="kpi-label">🚗 Clasificador vehículo <span class="badge bg-primary ms-1" style="font-size:.65rem">TEST</span></div>
+                    <div class="kpi-value">
+                        {% if summary.vehicle_test_acc %}{{ "%.2f" | format(summary.vehicle_test_acc * 100) }}%{% else %}—{% endif %}
+                    </div>
+                    <div class="kpi-sub">
+                        accuracy holdout test · MobileNetV2 · split 70/15/15
+                        {% if summary.vehicle_val_acc %}
+                        <br>Val: {{ "%.2f" | format(summary.vehicle_val_acc * 100) }}%
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card kpi kpi-yolo shadow-sm h-100">
+                <div class="card-body">
+                    <div class="kpi-label">🎯 Detector de placa <span class="badge ms-1" style="font-size:.65rem;background:#20c997">TEST</span></div>
+                    <div class="kpi-value">
+                        {% if summary.yolo_test_map50 %}{{ "%.1f" | format(summary.yolo_test_map50 * 100) }}%{% else %}—{% endif %}
+                    </div>
+                    <div class="kpi-sub">
+                        mAP@50 holdout test · YOLOv8s
+                        {% if summary.yolo_test_map5095 %}· mAP50-95 {{ "%.1f" | format(summary.yolo_test_map5095 * 100) }}%{% endif %}
+                        {% if summary.yolo_val_map50 %}
+                        <br>Val mAP@50: {{ "%.1f" | format(summary.yolo_val_map50 * 100) }}%
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card kpi kpi-origin shadow-sm h-100">
+                <div class="card-body">
+                    <div class="kpi-label">🗺️ Clasificador estado USA <span class="badge ms-1" style="font-size:.65rem;background:#fd7e14">TEST</span></div>
+                    <div class="kpi-value">
+                        {% if summary.origin_test_top1 %}{{ "%.2f" | format(summary.origin_test_top1 * 100) }}%{% else %}—{% endif %}
+                    </div>
+                    <div class="kpi-sub">
+                        Top-1 holdout test · MobileNetV2 · 51 clases
+                        {% if summary.origin_test_top5 %}· Top-5: {{ "%.1f" | format(summary.origin_test_top5 * 100) }}%{% endif %}
+                        {% if summary.origin_val_top1 %}
+                        <br>Val Top-1: {{ "%.2f" | format(summary.origin_val_top1 * 100) }}%
+                        {% if summary.origin_val_top5 %}· Top-5: {{ "%.1f" | format(summary.origin_val_top5 * 100) }}%{% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN 1: CLASIFICADOR VEHÍCULO -->
+    <h4 class="section-title"><span class="badge bg-primary">1</span> Clasificador de vehículo (moto / carro) · MobileNetV2</h4>
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <div class="chart-card">
+                <h6 class="mb-2">Accuracy por época</h6>
+                <p class="note mb-2">Curvas de entrenamiento y validación.</p>
+                <div class="chart-wrapper"><canvas id="chart-vehicle-acc"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="chart-card">
+                <h6 class="mb-2">Loss por época</h6>
+                <p class="note mb-2">Cross-entropy categórica.</p>
+                <div class="chart-wrapper"><canvas id="chart-vehicle-loss"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="chart-card">
+                <h6 class="mb-2">Matriz de confusión (val)</h6>
+                <p class="note mb-0">Clases: Bike (moto) · Car (carro).</p>
+                <img src="/static/plots/vehicle_confusion_matrix.png" class="img-fluid img-plot mt-2" alt="matriz de confusión vehículo val">
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="chart-card">
+                <h6 class="mb-2">Matriz de confusión (test · holdout)</h6>
+                <p class="note mb-0">Holdout 15% no visto durante el entrenamiento.</p>
+                <img src="/static/plots/vehicle_confusion_matrix_test.png" class="img-fluid img-plot mt-2" alt="matriz de confusión vehículo test">
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN 2: YOLO -->
+    <h4 class="section-title"><span class="badge" style="background:#20c997">2</span> Detector de placa (YOLOv8s)</h4>
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <div class="chart-card">
+                <h6 class="mb-2">mAP por época</h6>
+                <p class="note mb-2">mAP50 y mAP50-95 (métrica estándar de detección).</p>
+                <div class="chart-wrapper"><canvas id="chart-yolo-map"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="chart-card">
+                <h6 class="mb-2">Precision / Recall por época</h6>
+                <p class="note mb-2">Calidad de las bounding boxes predichas.</p>
+                <div class="chart-wrapper"><canvas id="chart-yolo-pr"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="chart-card">
+                <h6 class="mb-2">Curva Precision–Recall</h6>
+                <p class="note mb-0">Generada por Ultralytics sobre el val set.</p>
+                <img src="/static/plots/yolo_pr_curve.png" class="img-fluid img-plot mt-2" alt="pr curve yolo">
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="chart-card">
+                <h6 class="mb-2">Predicciones en validación</h6>
+                <p class="note mb-0">Batch del val set con las bboxes predichas.</p>
+                <img src="/static/plots/yolo_val_preds.jpg" class="img-fluid img-plot mt-2" alt="yolo predictions">
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN 3: CLASIFICADOR ESTADO USA -->
+    <h4 class="section-title"><span class="badge" style="background:#fd7e14">3</span> Clasificador de estado USA (MobileNetV2 · 51 clases)</h4>
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <div class="chart-card">
+                <h6 class="mb-2">Accuracy por época</h6>
+                <p class="note mb-2">Entrenamiento sobre 51 clases: 50 estados + Washington DC.</p>
+                <div class="chart-wrapper"><canvas id="chart-origin-acc"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="chart-card">
+                <h6 class="mb-2">Loss por época</h6>
+                <div class="chart-wrapper"><canvas id="chart-origin-loss"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-12">
+            <div class="chart-card">
+                <h6 class="mb-2">Matriz de confusión normalizada (val)</h6>
+                <p class="note mb-0">51×51 normalizada por fila. Diagonal brillante = buen desempeño por clase.</p>
+                <img src="/static/plots/origin_confusion_matrix.png" class="img-fluid img-plot mt-2" alt="matriz de confusión estado USA val">
+            </div>
+        </div>
+        <div class="col-lg-12">
+            <div class="chart-card">
+                <h6 class="mb-2">Matriz de confusión normalizada (test · holdout)</h6>
+                <p class="note mb-0">Métrica oficial reportada en el informe.</p>
+                <img src="/static/plots/origin_confusion_matrix_test.png" class="img-fluid img-plot mt-2" alt="matriz de confusión estado USA test">
+            </div>
+        </div>
+    </div>
+
+    <hr class="my-5">
+    <p class="text-muted small mb-5">
+        Las gráficas se generan automáticamente en <code>app/static/plots/</code> al entrenar los modelos
+        (<code>scripts/train_*.py</code>). Las curvas interactivas usan los <code>history_*.json</code> y
+        el <code>yolo_results.csv</code> que cada script deja tras el fit.
+    </p>
+</main>
+
+<script>
+const VEHICLE = {{ vehicle_hist | tojson if vehicle_hist else 'null' }};
+const ORIGIN = {{ origin_hist | tojson if origin_hist else 'null' }};
+const YOLO = {{ yolo_hist | tojson if yolo_hist else 'null' }};
+
+const baseOptions = (yLabel, {yMin, yMax, yPct} = {}) => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+        legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle' } },
+        tooltip: {
+            callbacks: {
+                label: (ctx) => {
+                    const v = ctx.parsed.y;
+                    const formatted = yPct ? (v * 100).toFixed(2) + '%' : v.toFixed(4);
+                    return `${ctx.dataset.label}: ${formatted}`;
+                }
+            }
+        }
+    },
+    scales: {
+        x: { title: { display: true, text: 'Época' }, grid: { color: 'rgba(0,0,0,0.05)' } },
+        y: {
+            title: { display: true, text: yLabel },
+            grid: { color: 'rgba(0,0,0,0.05)' },
+            min: yMin, max: yMax,
+            ticks: yPct ? { callback: (v) => (v * 100).toFixed(0) + '%' } : {}
+        }
+    }
+});
+
+function lineChart(id, labels, datasets, yLabel, extras = {}) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!labels || !labels.length) {
+        el.parentElement.innerHTML = '<p class="text-muted m-0">Sin datos (modelo no entrenado).</p>';
+        return;
+    }
+    new Chart(el, {
+        type: 'line',
+        data: { labels, datasets: datasets.map(d => ({ tension: 0.25, borderWidth: 2, pointRadius: 2, ...d })) },
+        options: baseOptions(yLabel, extras),
+    });
+}
+
+// Vehicle
+if (VEHICLE) {
+    const epochs = VEHICLE.accuracy.map((_, i) => i + 1);
+    lineChart('chart-vehicle-acc', epochs, [
+        { label: 'train accuracy', data: VEHICLE.accuracy, borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,.1)' },
+        { label: 'val accuracy', data: VEHICLE.val_accuracy, borderColor: '#198754', backgroundColor: 'rgba(25,135,84,.1)' },
+    ], 'accuracy', { yMin: 0, yMax: 1, yPct: true });
+    lineChart('chart-vehicle-loss', epochs, [
+        { label: 'train loss', data: VEHICLE.loss, borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,.1)' },
+        { label: 'val loss', data: VEHICLE.val_loss, borderColor: '#fd7e14', backgroundColor: 'rgba(253,126,20,.1)' },
+    ], 'loss');
+}
+
+// YOLO
+if (YOLO) {
+    lineChart('chart-yolo-map', YOLO.epochs, [
+        { label: 'mAP50', data: YOLO.map50, borderColor: '#20c997', backgroundColor: 'rgba(32,201,151,.15)', fill: true },
+        { label: 'mAP50-95', data: YOLO.map50_95, borderColor: '#0dcaf0', backgroundColor: 'rgba(13,202,240,.1)' },
+    ], 'mAP', { yMin: 0, yMax: 1, yPct: true });
+    lineChart('chart-yolo-pr', YOLO.epochs, [
+        { label: 'precision', data: YOLO.precision, borderColor: '#6f42c1', backgroundColor: 'rgba(111,66,193,.1)' },
+        { label: 'recall', data: YOLO.recall, borderColor: '#d63384', backgroundColor: 'rgba(214,51,132,.1)' },
+    ], 'valor', { yMin: 0, yMax: 1, yPct: true });
+}
+
+// Origin
+if (ORIGIN) {
+    const epochs = ORIGIN.accuracy.map((_, i) => i + 1);
+    lineChart('chart-origin-acc', epochs, [
+        { label: 'train accuracy', data: ORIGIN.accuracy, borderColor: '#fd7e14', backgroundColor: 'rgba(253,126,20,.1)' },
+        { label: 'val accuracy', data: ORIGIN.val_accuracy, borderColor: '#198754', backgroundColor: 'rgba(25,135,84,.1)' },
+    ], 'accuracy', { yMin: 0, yMax: 1, yPct: true });
+    lineChart('chart-origin-loss', epochs, [
+        { label: 'train loss', data: ORIGIN.loss, borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,.1)' },
+        { label: 'val loss', data: ORIGIN.val_loss, borderColor: '#6610f2', backgroundColor: 'rgba(102,16,242,.1)' },
+    ], 'loss');
+}
+</script>
+</body>
+</html>

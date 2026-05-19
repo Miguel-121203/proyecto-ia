@@ -370,6 +370,10 @@ Variables relevantes:
 
 ---
 
+## URL produccion
+
+- https://miguel1203-proyecto-ia-placas.hf.space
+
 ## Licencia y autores
 
 - **Autores:** Miguel Ángel Beltran Bohorquez, Nicolas Rivera Aroca, Huber Andres Parra Molina — Ingeniería de Sistemas, CORHUILA 2026-1.
